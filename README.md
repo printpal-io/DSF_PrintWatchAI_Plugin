@@ -1,4 +1,4 @@
-# PrintWatch AI Plugin
+# PrintWatch AI Plugin for Duet
 
 This plugin monitors the webcam stream on any RepRapFirmware printer for spaghetti type defects. It can work with any camera that is accessible via an IP address/HTTP endpoint. 
 It can only be used in SBC mode currently.
