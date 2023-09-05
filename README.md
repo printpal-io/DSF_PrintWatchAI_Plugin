@@ -1,6 +1,6 @@
 # PrintWatch AI Plugin
 
-This plugin monitors the webcam stream on any RepRapFirmware printer. It can work with any camera that is accessible via an IP address/HTTP endpoint. 
+This plugin monitors the webcam stream on any RepRapFirmware printer for spaghetti type defects. It can work with any camera that is accessible via an IP address/HTTP endpoint. 
 It can only be used in SBC mode currently.
 
 ## Installation
