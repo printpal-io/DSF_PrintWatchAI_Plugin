@@ -3,6 +3,7 @@
 This plugin monitors the webcam stream on any RepRapFirmware printer for spaghetti type defects. It can work with any camera that is accessible via an IP address/HTTP endpoint. 
 It can only be used in SBC mode currently.
 
+![alt text](https://forum.duet3d.com/assets/uploads/files/1693886852613-665bd7f4-af57-4130-a03a-eadb9dd80558-image.png)
 ## Installation
 
 To install this plugin, open DWC, go to `Settings -> Plugins -> External Plugins` and click on "Install Plugin".
