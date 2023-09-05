@@ -1,2 +1,11 @@
-# DSF_PrintWatchAI_Plugin
-SBC Plugin for DuetSoftwareFramework to monitor 3D prints using AI
+# PrintWatch AI Plugin
+
+This plugin monitors the webcam stream on any RepRapFirmware printer. It can work with any camera that is accessible via an IP address/HTTP endpoint. 
+It can only be used in SBC mode currently.
+
+## Installation
+
+To install this plugin, open DWC, go to `Settings -> Plugins -> External Plugins` and click on "Install Plugin".
+Then select the plugin ZIP file and confirm the following steps. The plugin ZIP can be found on the [GitHub repository](https://github.com/printpal-io/DSF_PrintWatchAI_Plugin/releases) **Releases -> Vesrion X.X.X -> PrintWatch-X.X.X.zip**. 
+
+## Usage
