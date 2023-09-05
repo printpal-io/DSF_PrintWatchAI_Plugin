@@ -11,27 +11,20 @@
   "sbcExecutable": "main.py",
   "sbcOutputRedirected": false,
   "sbcPythonDependencies": [
-    "pip==23.2.1",
-    "setuptools",
-    "wheel",
+    "dsf-python",
     "aiohttp",
     "ujson",
-    "typing",
-    "uvicorn",
     "Pillow",
-    "requests",
-    "fastapi"
+    "requests"
   ],
   "sbcPackageDependencies": [],
   "sbcPermissions": [
-    "objectModelRead",
+    "registerHttpEndpoints",
     "objectModelReadWrite",
-    "launchProcesses",
     "networkAccess",
     "webcamAccess",
     "readSystem",
-    "fileSystemAccess",
-    "launchProcesses"
+    "fileSystemAccess"
   ],
   "tags": [
     "AI",
