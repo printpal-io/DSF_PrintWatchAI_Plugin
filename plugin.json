@@ -1,0 +1,41 @@
+{
+  "id": "PrintWatch",
+  "name": "PrintWatch AI",
+  "author": "printpal.io LLC",
+  "version": "3.4.2",
+  "license": "GPL-2.0-only",
+  "homepage": "https://printpal.io",
+  "dwcVersion": "3.4",
+  "sbcRequired": true,
+  "sbcDsfVersion": "3.4",
+  "sbcExecutable": "main.py",
+  "sbcOutputRedirected": false,
+  "sbcPythonDependencies": [
+    "pip==23.2.1",
+    "setuptools",
+    "wheel",
+    "aiohttp",
+    "ujson",
+    "typing",
+    "uvicorn",
+    "Pillow",
+    "requests",
+    "fastapi"
+  ],
+  "sbcPackageDependencies": [],
+  "sbcPermissions": [
+    "objectModelRead",
+    "objectModelReadWrite",
+    "launchProcesses",
+    "networkAccess",
+    "webcamAccess",
+    "readSystem",
+    "fileSystemAccess",
+    "launchProcesses"
+  ],
+  "tags": [
+    "AI",
+    "monitoring",
+    "printwatch"
+  ]
+}
