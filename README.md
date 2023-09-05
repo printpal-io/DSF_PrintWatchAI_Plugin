@@ -8,7 +8,7 @@ It can only be used in SBC mode currently.
 To install this plugin, open DWC, go to `Settings -> Plugins -> External Plugins` and click on "Install Plugin".
 Then select the plugin ZIP file and confirm the following steps. 
 
-The plugin ZIP can be found on this GitHub repository's **Releases -> Vesrion X.X.X -> PrintWatch-X.X.X.zip**. 
+The plugin ZIP can be found on this GitHub repository's **Releases -> Version X.X.X -> PrintWatch-X.X.X.zip**. 
 
 Alternatively, click [here](https://github.com/printpal-io/DSF_PrintWatchAI_Plugin/releases) to be taken to the release page.
 
