@@ -13,6 +13,15 @@ The plugin ZIP can be found on this GitHub repository's **Releases -> Version X.
 
 Alternatively, click [here](https://github.com/printpal-io/DSF_PrintWatchAI_Plugin/releases) to be taken to the release page.
 
+**Notice:**
+
+As of September 7th, 2023, there is a bug with this plugin using DSF 3.5.0-rc that will cause the HTTP endpoints created for this plugin to be unreachable.
+To fix this:
+
+- Make sure the plugin is installed and started
+- SSH into the SBC
+- Enter the following command: `sudo systemctl restart duetwebserver`
+
 ## Usage
 **Getting started with the plugin.**
   1. Go to the plugin tab by navigating the side panel **Plugins -> PrintWatch AI**
