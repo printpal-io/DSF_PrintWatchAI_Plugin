@@ -22,6 +22,9 @@ To fix this:
 - SSH into the SBC
 - Enter the following command: `sudo systemctl restart duetwebserver`
 
+This will restart the webserver and register the endpoints correctly. This must be done every time the SBC is started up. This should be fixed in the next release.
+
+
 ## Usage
 **Getting started with the plugin.**
   1. Go to the plugin tab by navigating the side panel **Plugins -> PrintWatch AI**
