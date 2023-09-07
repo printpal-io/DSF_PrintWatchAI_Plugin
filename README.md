@@ -23,7 +23,7 @@ Alternatively, click [here](https://github.com/printpal-io/DSF_PrintWatchAI_Plug
       2. Enter desired credentials
       3. Verify account with code sent via email
       4. Log into the WebApp and navigate to **Account -> Settings** and copy the **API key** value. Paste this value into the **API key** field in the Duet plugin
-  6. For the Webcam URL input, enter the HTTP url at which the static image of the IP camera can be found. If using [Motion](https://plugins.duet3d.com/plugins/MotionWebcamServerPlugin.html) to handle the webcam streaming,       this value will be: "http://<ip_address>:<port>/<camera_number>/current". If configured using default settings with the Motion Plugin, this will be:  "http://localhost:8081/0/current"
+  5. For the Webcam URL input, enter the HTTP url at which the static image of the IP camera can be found. If using [Motion](https://plugins.duet3d.com/plugins/MotionWebcamServerPlugin.html) to handle the webcam streaming, this value will be: "http://<ip_address>:<port>/<camera_number>/current". If configured using default settings with the Motion Plugin, this will be:  "http://localhost:8081/0/current"
 
 
 **Thresholds**
