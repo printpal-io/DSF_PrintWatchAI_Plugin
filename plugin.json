@@ -11,7 +11,7 @@
   "sbcExecutable": "main.py",
   "sbcOutputRedirected": false,
   "sbcPythonDependencies": [
-    "dsf-python",
+    "dsf-python==3.4.6",
     "aiohttp",
     "ujson",
     "Pillow",
