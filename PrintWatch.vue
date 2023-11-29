@@ -128,6 +128,12 @@ img {
 																<v-text-field v-model="snapshotUrl" label="Webcam URL" hide-details></v-text-field>
 															</v-col>
 															<v-col cols="12" md="8">
+																<v-select v-model="rotation"
+																  label="Counter-Clockwise Rotation"
+																  :items="['0', '90', '180', '270']"
+																></v-select>
+															</v-col>
+															<v-col cols="12" md="8">
 																<v-text-field v-model="emailAddr" label="Email address" hide-details></v-text-field>
 															</v-col>
 															<div class="pt-8">
@@ -175,6 +181,9 @@ img {
 															<v-col cols="12" md="12">
 																<v-switch v-model="pausePrint" label="Pause Print" hide-details></v-switch>
 															</v-col>
+															<v-col cols="12" md="8">
+																<v-text-field v-model="pauseGCode" label="Pause G/M-Code command" :disabled="!pausePrint" hide-details></v-text-field>
+															</v-col>
 														</div>
 													</div>
 												</div>
@@ -219,7 +228,12 @@ export default {
 			apiKey : '',
 			testMode : false,
 			defectLevel : 0,
-			gaugeColor : 'primary'
+			gaugeColor : 'primary',
+			pauseGCode : '',
+			cameraIPValid : false,
+			validateCamIntervalId : undefined,
+			webcamController : undefined,
+			rotation : '0'
 		}
 	},
 
@@ -249,6 +263,8 @@ export default {
 					this.apiKey = data.settings.api_key;
 					this.testMode = data.settings.test_mode;
 					this.enableMonitoring = data.settings.monitoring_on;
+					this.pauseGCode = data.settings.pause_gcode;
+					this.rotation = Math.floor(data.settings.rotation).toString();
 				})
 				.catch(error => {
 					console.log('There was a problem with the fetch operation:', error);
@@ -380,13 +396,19 @@ export default {
 			}
 		},
 		apiKey : function(){
-			this.setSettings("api_key", this.apiKey);
+			if (this.apiKey != '') {
+				this.setSettings("api_key", this.apiKey);
+			}
 		},
 		snapshotUrl : function(){
-			this.setSettings("camera_ip", this.snapshotUrl);
+			if (this.snapshotUrl != '' && this.snapshotUrl.length > 5) {
+				this.setSettings("camera_ip", this.snapshotUrl);
+			}
 		},
 		emailAddr : function(){
-			this.setSettings("email_addr", this.emailAddr);
+			if (this.emailAddr != '' && this.emailAddr.length > 5) {
+				this.setSettings("email_addr", this.emailAddr);
+			}
 		},
 		notificationThreshold : function(){
 			this.setSettings("notification_threshold", this.notificationThreshold);
@@ -402,6 +424,14 @@ export default {
 		},
 		testMode : function(){
 			this.setSettings("test_mode", this.testMode);
+		},
+		rotation : function(){
+			this.setSettings("rotation", this.rotation);
+		},
+		pauseGCode : function(){
+			if (this.pauseGCode != '' && this.pauseGCode.length > 1) {
+				this.setSettings("pause_gcode", this.pauseGCode);
+			}
 		},
 		defectLevel : function(){
 			this.setGaugeColor();

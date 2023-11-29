@@ -1,7 +1,7 @@
 #from fastapi import FastAPI, APIRouter, HTTPException
 #from fastapi.middleware.cors import CORSMiddleware
 from .client import *
-from .utils import *
+from .utils import LoopHandler, Scheduler, _async_heartbeat, RepRapAPI
 from .interface import *
 import asyncio
 import ujson
@@ -9,7 +9,6 @@ import ujson
 import os
 from dsf.connections import CommandConnection
 from dsf.http import HttpEndpointConnection, HttpEndpointType, HttpResponseType
-
 
 def get_or_create_eventloop():
     try:
@@ -32,15 +31,19 @@ class PrintFarmPro:
         Load settings, create API endpoints, and begin the program.
 
         '''
-        self.rep_rap_api = RepRapAPI()
         self.runner = None
+        self.printwatch = None
+        self.rep_rap_api = None
+        #self.rep_rap_api = RepRapAPI()
+        #self.runner = None
         self._load_settings()
-        self.printwatch = PrintWatchClient(settings=self.settings)
+        self.aio = get_or_create_eventloop()
+        #self.printwatch = PrintWatchClient(settings=self.settings)
         if self.settings.get("monitoring_on"):
             self._init_monitor()
         self._init_api()
 
-        self.aio = get_or_create_eventloop()
+        #self.aio = get_or_create_eventloop()
         self.aio.run_forever()
 
     def _init_api(self):
@@ -80,19 +83,37 @@ class PrintFarmPro:
         self.cmd_conns.append(CommandConnection(debug=False))
         self.cmd_conns[5].connect()
 
-        self.endpoints.append(self.cmd_conns[0].add_http_endpoint(HttpEndpointType.GET, "printwatch", "monitor_off"))
+        self.endpoints.append(self.cmd_conns[5].add_http_endpoint(HttpEndpointType.GET, "printwatch", "monitor_off"))
         self.endpoints[5].set_endpoint_handler(self._kill_monitor)
 
 
-    def _on_settings_change(self):
-        #url_updated = self.rep_rap_api.set_url(self.settings.get("duet_ip"))
 
-        if True:
+
+    def _on_settings_change(self):
+        if self.printwatch is None:
+            self.printwatch = PrintWatchClient(settings=self.settings)
+
+        if self.settings.get("printer_id", "") == "" or ('-' not in self.rep_rap_api.uniqueId):
             self.rep_rap_api._get_uid()
             self.settings["printer_id"] = self.rep_rap_api.uniqueId
         if self.runner is not None:
             self.runner._loop_handler.resize_buffers()
             self.runner._loop_handler.camera.ip = self.settings.get("camera_ip")
+
+        settings_ = {
+                    'detection_threshold' : int(self.settings.get("thresholds", {}).get("display", 0.6) * 100),
+                    'buffer_length' : int(self.settings.get("buffer_length")),
+                    'notification_threshold' : int(self.settings.get("thresholds", {}).get("notification", .30) * 100),
+                    'action_threshold' : int(self.settings.get("thresholds", {}).get("action", .60) * 100),
+                    'enable_notification' : self.settings.get("actions", {}).get("notify", False),
+                    'email_address' : self.settings.get("email_addr"),
+                    'pause_print' : self.settings.get("actions", {}).get("pause", False),
+                    'cancel_print' : self.settings.get("actions", {}).get("cancel", False),
+                    'extruder_heat_off' : self.settings.get("actions", {}).get("extruder_off", False),
+                    'enable_feedback_images' : True
+                }
+        asyncio.ensure_future(_async_heartbeat(api_client=self.printwatch, settings=settings_))
+
     def _save_settings(self):
         with open("settings.json", "w") as f:
             ujson.dump(self.settings, f, indent=4)
@@ -120,13 +141,19 @@ class PrintFarmPro:
                     "notify" : False,
                     "extruder_off" : False,
                     "macro" : False
-                }
+                },
+                "current_sma" : 0.0,
+                "require_sync" : 0, # Enum value, {0 : no sync required, 1 : backend has correct value, 2: frontend has correct}
+                "pause_gcode" : "",
+                "rotation" : 0
             }
+            self.rep_rap_api = RepRapAPI()
             self._on_settings_change()
             self._save_settings()
         else:
             with open("settings.json", "r") as f:
                 self.settings = ujson.load(f)
+            self.rep_rap_api = RepRapAPI()
             self._on_settings_change()
 
     def _init_monitor(self, ticket_id : str = ''):
@@ -190,6 +217,8 @@ class PrintFarmPro:
                         self.settings['actions']['notify'] = value
                     elif key == 'pause_action':
                         self.settings['actions']['pause'] = value
+                    elif key == 'rotation':
+                        self.settings["rotation"] = int(value)
                     else:
                         self.settings[key] = value
             self._save_settings()

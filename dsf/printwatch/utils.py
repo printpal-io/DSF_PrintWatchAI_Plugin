@@ -15,6 +15,11 @@ import logging
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
+logger = logging.getLogger('PrintWatch')
+logger.setLevel(logging.DEBUG)
+
+fh = logging.FileHandler('printwatch.log')
+logger.addHandler(fh)
 
 
 DUET_STATES = {
@@ -29,6 +34,24 @@ DUET_STATES = {
     "F" : "Flashing", # Flashing new firmware
     "T" : "Toolchange"
 }
+
+DSF_STATES = [
+    'disconnected',
+    'starting',
+    'updating',
+    'off',
+    'halted',
+    'pausing',
+    'paused',
+    'resuming',
+    'cancelling',
+    'processing',
+    'simulating',
+    'busy',
+    'changingTool',
+    'idle'
+]
+
 
 def get_camera_struct(request) -> list:
     '''
@@ -117,7 +140,6 @@ class RepRapAPI:
     def __init__(self, url : str = 'localhost'):
         self.url = url
         self.uniqueId = ''
-        self.uniqueIdFromRR = False
         self._get_uid()
 
     def set_url(self, url):
@@ -133,22 +155,13 @@ class RepRapAPI:
                 response = response.json()
                 uniqueId = response.get("boards")[0].get("uniqueId")
                 self.uniqueId = uniqueId
-                if uniqueId.strip() in [None, ""] or len(uniqueId) < 4:
-                    if len(self.uniqueId) > 10 and not self.uniqueIdFromRR:
-                        uniqueId = uuid4().hex
-                        self.uniqueId = uniqueId
-                        self.uniqueIdFromRR = False
-                else:
-                    self.uniqueIdFromRR = True
             except:
-                if len(self.uniqueId) > 10 and not self.uniqueIdFromRR:
+                if '-' not in self.uniqueId:
                     uniqueId = uuid4().hex
-                    self.uniqueIdFromRR = False
                     self.uniqueId = uniqueId
         else:
-            if len(self.uniqueId) > 10 and not self.uniqueIdFromRR:
+            if '-' not in self.uniqueId:
                 uniqueId = uuid4().hex
-                self.uniqueIdFromRR = False
                 self.uniqueId = uniqueId
 
 
@@ -208,10 +221,31 @@ class RepRapAPI:
 
     def parse_state_response(self, response):
         if not isinstance(response , bool):
-            state_response = response.get("boards", [{}])[0].get("state", None)
+            state_response = response.get("state", {}).get("status", '').lower()
             return state_response
         return False
 
+async def _async_heartbeat(
+        api_client : PrintWatchClient,
+        settings : dict = {},
+        state : int = 0
+    ):
+    '''
+    Returns the heartbeat response in an asynchrnous function call
+
+    Inputs:
+    - api_client : PrintWatchClient - the client object to us for the API call
+
+    Returns:
+    - response : Flask.Response - inference response
+    '''
+    payload = api_client._create_payload(
+                            heartbeat=True,
+                            settings=settings,
+                            state=state
+                        )
+    response = await api_client._send_async('api/v2/heartbeat', payload)
+    return response
 
 async def _async_infer(
         image,
@@ -290,7 +324,7 @@ class LoopHandler:
         self._lastAction = 0
         self._notificationsSent = []
         self._lastNotification = 0
-        self.retrigger_valid = False
+        self.retrigger_valid = True
         self.notifyTimer = 10.0 * 60.0 # 10 minutes between notifications minimum
         self.duet_states = duet_states
         self.rep_rap_api = rep_rap_api
@@ -321,6 +355,7 @@ class LoopHandler:
             y2 = det[3] * height
             process_image.rectangle([(x1, y1), (x2, y2)], fill=None, outline="red", width=4)
 
+
         out_img = BytesIO()
         pil_img.save(out_img, format='PNG')
         contents = b64encode(out_img.getvalue()).decode('utf8')
@@ -347,7 +382,44 @@ class LoopHandler:
         while len(self._scores) > self.settings.get("buffer_length") * self.MULTIPLIER:
             self._scores.pop(0)
 
+        self.settings["current_sma"] = smas[0]
 
+    def _check_action(self, response : dict) -> None:
+        action = response.get('action')
+        if action == 'pause':
+            # Send pause command to printer
+            '''
+            while not ((self.plugin._printer.is_pausing() and self.plugin._printer.is_printing()) or self.plugin._printer.is_paused()):
+                self.plugin._printer.pause_print()
+            '''
+            pass
+        elif action == 'cancel':
+            # cancel current print
+            '''
+            while not (self.plugin._printer.is_cancelling() and self.plugin._printer.is_printing()):
+                self.plugin._printer.cancel_print()
+            '''
+            pass
+        elif action == 'resume':
+            # resume current print
+            '''
+            if self.plugin._printer.is_paused():
+                while not self.plugin._printer.is_printing():
+                    self.plugin._printer.resume_print()
+            '''
+            pass
+        if response.get('settings') not in [None, False]:
+            self.settings["thresholds"]["display"] = response.get('settings').get('detection_threshold') / 100.
+
+            self.settings['buffer_length'] = response.get('settings').get('buffer_length')
+            self.settings['thresholds']['notification'] = response.get('settings').get('notification_threshold') / 100.
+            self.settings['thresholds']['action'] = response.get('settings').get('action_threshold') / 100.
+            self.settings['actions']["notify"] = response.get('settings').get('enable_notification')
+            self.settings['email_addr'] = response.get('settings').get('email_address')
+            self.settings['actions']['pause'] = response.get('settings').get('pause_print')
+            self.settings['actions']['cancel'] = response.get('settings').get('cancel_print')
+            self.settings['actions']['extruder_off'] = response.get('settings').get('extruder_heat_off')
+            self.settings["require_sync"] = True
 
     def _allow_trigger(
             self,
@@ -362,14 +434,14 @@ class LoopHandler:
         Returns:
         - valid : Boolean - whether a certain trigger should be allowed
         '''
-        if self._actionsSent > 10: # May want to change this for the show
-            return False
+        #if self._actionsSent > 10: # May want to change this for the show
+        #    return False
         if type == 'notify':
-            if self.last_n_notifications_interval() < 100: #and self.retrigger_check():
-                return True if len(self._notificationsSent) < 1000 and time() - self._lastNotification > self.notifyTimer else False
+            if self.last_n_notifications_interval() < 10: #and self.retrigger_check():
+                return True if len(self._notificationsSent) < 10 and time() - self._lastNotification > self.notifyTimer else False
             return False
         elif type == 'action':
-            return True if self._actionsSent < 100 and time() - self._lastAction > self.notifyTimer else False
+            return True if self._actionsSent < 10 and time() - self._lastAction > self.notifyTimer else False
 
     def last_n_notifications_interval(self, interval : int = 4 * 60 * 60) -> int:
         '''
@@ -408,12 +480,10 @@ class LoopHandler:
         - Boolean - Whether retrigger has latched
         '''
         if not self.retrigger_valid:
-            num_below_threshold = [True if ele < self.settings.get("thresholds", {}).get("notification", 0.3) else False for ele in self._buffer].count(True)
-            if num_below_threshold >= int(self.settings.get("buffer_length") * self.settings.get("buffer_percent")):
+            num_below_threshold = [ele[0] < float(self.settings.get("thresholds", {}).get("notification", 0.3)) for ele in self._buffer].count(True)
+            if num_below_threshold >= int(self.settings.get("buffer_length") * self.settings.get("buffer_percent")/100):
                 self.retrigger_valid = True
-                return True
-            return False
-        return True
+        return self.retrigger_valid
 
 
 
@@ -430,13 +500,15 @@ class LoopHandler:
             notification_level = 'action'
             if self.settings.get("actions", {}).get("pause", False) or self.settings.get("actions", {}).get("cancel", False):
                 print("SENDING ACTION")
+                logger.debug("SENDING ACTION")
                 # Take the pause action if enabled
-                r = await self.rep_rap_api._pause_print(gcode = 'm25')
+                r = await self.rep_rap_api._pause_print(gcode = self.settings.get("pause_gcode"))
 
                 response = await _async_notify(
                                         api_client=self._api_client,
                                         notification_level=notification_level
                                     )
+                logger.debug("ASYNC NOTIFY ACTION: {}".format(response))
 
                 if response.get('statusCode') == 200:
                     self._buffer = [0] * self.settings.get("buffer_length")
@@ -449,12 +521,14 @@ class LoopHandler:
                     pass
         elif self._levels[0] and self._allow_trigger('notify'):
             print("Sending Warning via Email")
+            logger.debug("Sending Warning via Email")
             notification_level = 'warning'
 
             response = await _async_notify(
                                     api_client=self._api_client,
                                     notification_level=notification_level
                                 )
+            logger.debug("Warning email response: {}".format(response))
             self._lastNotification = time()
             self.retrigger_valid = False
             self._notificationsSent.append(time())
@@ -469,14 +543,28 @@ class LoopHandler:
         try:
             # Add conditional for checking whether print state
             duet_state = await self.rep_rap_api._get_state('/machine/status')
-            if self.rep_rap_api.parse_state_response(duet_state) == 'P' or self.settings.get("test_mode"):
+            sr_ = self.rep_rap_api.parse_state_response(duet_state) in ['printing', 'processing', 'busy']
+            logger.debug(f'Printer state: {self.rep_rap_api.parse_state_response(duet_state)}')
+            if sr_ or self.settings.get("test_mode"):
                 frame = self.camera.snap_sync()
                 if not isinstance(frame, bool):
-
-
                     # Get the DUET print state here
-                    print_stats = {}
-                    if self.settings.get("test_mode") and not self.rep_rap_api.parse_state_response(duet_state) == 'P':
+                    if sr_:
+                        job_state_ = duet_state.get("job")
+
+                        job_name_ = job_state_.get("file", {}).get("fileName", 'temp-job-name.stl')
+                        t_ = job_state_.get("duration", 550) if job_state_.get("duration", 550) is not None else 550
+                        tl_ = job_state_.get("timesLeft", {}).get("file", 100) if job_state_.get("timesLeft", {}).get("file", 100) is not None else 100
+                        print_stats = {
+                            "state" : 0,
+                            "printTime" : t_,
+                            "printTimeLeft" : tl_,
+                            "progress" : float(t_/(tl_ + t_)),
+                            "job_name" : job_name_
+                        }
+
+                        logger.debug(f'Print stats: {print_stats}')
+                    else:
                         print_stats = {
                             "state" : 0,
                             "printTime" : 550,
@@ -484,6 +572,12 @@ class LoopHandler:
                             "progress" : 99.9,
                             "job_name" : "temp-job-name.stl"
                         }
+                    if self.settings.get("rotation") > 0:
+                        frame = Image.open(BytesIO(frame))
+                        frame = frame.rotate(int(self.settings.get("rotation")), expand=True)
+                        frame_ = BytesIO()
+                        frame.save(frame_, format='PNG')
+                        frame = frame_.getvalue()
 
                     response = await _async_infer(
                                         image=b64encode(frame).decode('utf8'),
@@ -498,13 +592,17 @@ class LoopHandler:
                                     smas=response.get("smas")[0],
                                     levels=response.get("levels")
                             )
+
+                        self._check_action(response)
                         await self._handle_action()
                 else:
                     print("Issue with camera")
         except Exception as e:
             print("Exception as e: {}".format(str(e)))
+            logger.debug("Exception as e: {}".format(str(e)))
         except Exception as e:
             print("Error running once: {}".format(str(e)))
+            logger.debug("Error running once: {}".format(str(e)))
 
 
 

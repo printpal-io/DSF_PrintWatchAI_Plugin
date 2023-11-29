@@ -12,7 +12,7 @@ class PrintWatchClient():
             stream=None,
             ssl : bool = True
         ):
-        self.route = 'https://ai.printpal.io' if ssl else 'http://ai.printpal.io'
+        self.route = 'https://octoprint.printpal.io'
         self.settings = settings
         self.ticket_id = ''
 
@@ -24,11 +24,14 @@ class PrintWatchClient():
 
     def _create_payload(
             self,
-            encoded_image,
+            encoded_image = None,
             scores : list = [],
             print_stats : dict = {},
             notify : bool = False,
-            notification_level : str = 'warning'
+            heartbeat : bool = False,
+            notification_level : str = 'warning',
+            settings : dict = {},
+            state : int = 0
         ):
         if notify:
             payload = {
@@ -42,6 +45,20 @@ class PrintWatchClient():
                 "notification" : notification_level,
                 "time" : datetime.datetime.now().strftime("%m/%d/%Y %H:%M:%S")
             }
+        elif heartbeat:
+            payload = {
+                'api_key' : self.settings.get("api_key"),
+                'printer_id' : self.settings.get("printer_id"),
+                'ticket_id' : self.ticket_id,
+                'version' : '1.3.01',
+                'state' : state,
+                'force' : True,
+            }
+
+            if len(settings) > 0:
+                payload["settings"] = {}
+                for key, ele in settings.items():
+                    payload["settings"][key] = ele
         else:
             if self.ticket_id == '':
                 self.create_ticket()
@@ -50,15 +67,14 @@ class PrintWatchClient():
                 'api_key' : self.settings.get("api_key"),
                 'printer_id' : self.settings.get("printer_id"),
                 'ticket_id' : self.ticket_id,
-                'version' : '1.2.11',
+                'version' : '1.3.01',
                 'state' : 0,
                 'conf' : int(self.settings.get("thresholds", {}).get("display", 0.6) * 100),
                 'buffer_length' : self.settings.get("buffer_length"),
                 'buffer_percent' : self.settings.get("buffer_percent"),
                 'thresholds' : [self.settings.get("thresholds", {}).get("notification", 0.3), self.settings.get("thresholds", {}).get("action", 0.6)],
                 'scores' : scores,
-                'sma_spaghetti' : 0,
-                'email_addr' : self.settings.get("email_addr"),
+                'sma_spaghetti' : self.settings.get("current_sma", 0.0),
                 'enable_feedback_images' : True
             }
             for key, ele in print_stats.items():
