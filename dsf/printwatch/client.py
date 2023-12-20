@@ -1,5 +1,5 @@
 import datetime
-import aiohttp
+import requests
 from uuid import uuid4
 
 class PrintWatchClient():
@@ -90,15 +90,27 @@ class PrintWatchClient():
                 endpoint,
                 payload
             ):
+            r_ = requests.post(
+                            '{}/{}'.format(self.route, endpoint),
+                            json = payload,
+                            headers={'User-Agent': 'Mozilla/5.0'},
+                            timeout=30.0
+                            )
+            r = r_.json()
+            self.response = r
+            return r
 
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                                '{}/{}'.format(self.route, endpoint),
-                                json = payload,
-                                headers={'User-Agent': 'Mozilla/5.0'},
-                                timeout=aiohttp.ClientTimeout(total=30.0)
-                            ) as response:
-                            r = await response.json()
-
+    def _send_sync(
+                self,
+                endpoint,
+                payload
+            ):
+            r_ = requests.post(
+                            '{}/{}'.format(self.route, endpoint),
+                            json = payload,
+                            headers={'User-Agent': 'Mozilla/5.0'},
+                            timeout=30.0
+                            )
+            r = r_.json()
             self.response = r
             return r

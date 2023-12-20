@@ -1,11 +1,8 @@
-#from fastapi import FastAPI, APIRouter, HTTPException
-#from fastapi.middleware.cors import CORSMiddleware
 from .client import *
 from .utils import LoopHandler, Scheduler, _async_heartbeat, RepRapAPI
 from .interface import *
 import asyncio
 import ujson
-#import uvicorn
 import os
 from dsf.connections import CommandConnection
 from dsf.http import HttpEndpointConnection, HttpEndpointType, HttpResponseType
@@ -34,16 +31,11 @@ class PrintFarmPro:
         self.runner = None
         self.printwatch = None
         self.rep_rap_api = None
-        #self.rep_rap_api = RepRapAPI()
-        #self.runner = None
         self._load_settings()
         self.aio = get_or_create_eventloop()
-        #self.printwatch = PrintWatchClient(settings=self.settings)
         if self.settings.get("monitoring_on"):
             self._init_monitor()
         self._init_api()
-
-        #self.aio = get_or_create_eventloop()
         self.aio.run_forever()
 
     def _init_api(self):
@@ -112,7 +104,7 @@ class PrintFarmPro:
                     'extruder_heat_off' : self.settings.get("actions", {}).get("extruder_off", False),
                     'enable_feedback_images' : True
                 }
-        asyncio.ensure_future(_async_heartbeat(api_client=self.printwatch, settings=settings_))
+        _async_heartbeat(api_client=self.printwatch, settings=settings_)
 
     def _save_settings(self):
         with open("settings.json", "w") as f:
@@ -145,6 +137,8 @@ class PrintFarmPro:
                 "current_sma" : 0.0,
                 "require_sync" : 0, # Enum value, {0 : no sync required, 1 : backend has correct value, 2: frontend has correct}
                 "pause_gcode" : "",
+                "cancel_gcode" : "",
+                "resume_gcode" : "",
                 "rotation" : 0
             }
             self.rep_rap_api = RepRapAPI()
@@ -187,16 +181,23 @@ class PrintFarmPro:
                     }), response_type=HttpResponseType.JSON)
         http_endpoint_connection.close()
 
-
     async def _get_preview(self, http_endpoint_connection: HttpEndpointConnection):
         await http_endpoint_connection.read_request()
         if self.runner is None:
             await http_endpoint_connection.send_response(200, ujson.dumps({'status' : 8001, 'response' : 'No monitor active'}), response_type=HttpResponseType.JSON)
         else:
+            if self.runner._loop_handler.active:
+                if self.runner._loop_handler.settingsIssue:
+                    preview_ = 'settingsIssue'
+                else:
+                    preview_ = 'loading' if self.runner._loop_handler.currentPreview is None else self.runner._loop_handler.currentPreview
+            else:
+                preview_ = None
             await http_endpoint_connection.send_response(200, ujson.dumps({'status' : 8000,
                     'items' :
                         {'status' :
-                            {'preview' : self.runner._loop_handler.currentPreview
+                            {'preview' : preview_,
+                            'message' : self.runner._loop_handler.errorMsg
                             }
                         }
                     }), response_type=HttpResponseType.JSON)
@@ -234,8 +235,6 @@ class PrintFarmPro:
         await http_endpoint_connection.send_response(200, ujson.dumps({'status' : 8000, 'settings' : self.settings}), response_type=HttpResponseType.JSON)
         http_endpoint_connection.close()
 
-
-
     async def _add_monitor(self, http_endpoint_connection: HttpEndpointConnection):
         await http_endpoint_connection.read_request()
         result = self._init_monitor()
@@ -244,7 +243,6 @@ class PrintFarmPro:
         else:
             await http_endpoint_connection.send_response(200, ujson.dumps({'status' : 8001, 'response' : 'Monitor loop already exists'}), response_type=HttpResponseType.JSON)
         http_endpoint_connection.close()
-
 
     async def _kill_monitor(self, http_endpoint_connection: HttpEndpointConnection):
         await http_endpoint_connection.read_request()

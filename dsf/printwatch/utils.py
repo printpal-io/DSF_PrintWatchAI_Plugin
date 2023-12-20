@@ -4,7 +4,6 @@ from time import time
 from base64 import b64encode
 from uuid import uuid4
 import asyncio
-import aiohttp
 import requests
 from PIL import ImageDraw
 import PIL.Image as Image
@@ -21,6 +20,7 @@ logger.setLevel(logging.DEBUG)
 fh = logging.FileHandler('printwatch.log')
 logger.addHandler(fh)
 
+FRAME_CONSTANT = 640
 
 DUET_STATES = {
     "C" : "Configuration",
@@ -52,41 +52,6 @@ DSF_STATES = [
     'idle'
 ]
 
-
-def get_camera_struct(request) -> list:
-    '''
-    Returns the cameraStructure from a request
-
-    Inputs:
-    - request : flask.request - the request associated with an endpoint call
-
-    Returns:
-    - cameraStruct | list : list
-    '''
-    try:
-        data = request.get_json()
-        cameraStruct = data.get('cameras', None)
-        return cameraStruct
-    except Exception as e:
-        print("Error get camera struct: {}".format(str(e)))
-        return [False, e]
-
-def get_setting_struct(request):
-    '''
-    Returns the settings structure from a request
-
-    Inputs:
-    - request : flask.request - the request associated with an endpoint call
-
-    Returns:
-    - settingStruct | dict : dict
-    '''
-    try:
-        data = request.get_json()
-        return data
-    except Exception as e:
-        print("Error get settings struct: {}".format(str(e)))
-        return {}
 
 def xywh2xyxy(region : list) -> list:
     '''
@@ -165,7 +130,7 @@ class RepRapAPI:
                 self.uniqueId = uniqueId
 
 
-    async def _get_state(
+    def _get_state(
                 self,
                 endpoint : str = '',
                 status_type : int = 3
@@ -181,21 +146,18 @@ class RepRapAPI:
             - response : dict - RepRap firmware status response
             '''
             try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(
-                                    'http://{}{}?type={}'.format(
-                                                            self.url,
-                                                            endpoint,
-                                                            status_type
-                                    ),
-                                    timeout=aiohttp.ClientTimeout(total=1.0)
-                                ) as response:
-                                r = await response.json()
+                r_ = requests.get('http://{}{}?type={}'.format(
+                                        self.url,
+                                        endpoint,
+                                        status_type
+                                        ),
+                                        timeout=5.0)
+                r = r_.json()
                 return r
             except:
                 return False
 
-    async def _pause_print(
+    def _pause_print(
                     self,
                     gcode : str = 'm25'
                 ):
@@ -208,15 +170,14 @@ class RepRapAPI:
                 Returns:
                 - response : dict - RepRap firmware pause print command response
                 '''
-                async with aiohttp.ClientSession() as session:
-                    async with session.post(
-                                    'http://{}/machine/code?async=false'.format(
-                                                            self.url
-                                    ),
-                                    data=f'{gcode}',
-                                    timeout=aiohttp.ClientTimeout(total=10.0)
-                                ) as response:
-                                r = await response.text()
+                r_ = requests.post(
+                                'http://{}/machine/code?async=false'.format(
+                                                        self.url
+                                ),
+                                data=f'{gcode}',
+                                timeout=10.0
+                                )
+                r = r_.text
                 return r
 
     def parse_state_response(self, response):
@@ -225,7 +186,7 @@ class RepRapAPI:
             return state_response
         return False
 
-async def _async_heartbeat(
+def _async_heartbeat(
         api_client : PrintWatchClient,
         settings : dict = {},
         state : int = 0
@@ -244,10 +205,10 @@ async def _async_heartbeat(
                             settings=settings,
                             state=state
                         )
-    response = await api_client._send_async('api/v2/heartbeat', payload)
+    response = api_client._send_sync('api/v2/heartbeat', payload)
     return response
 
-async def _async_infer(
+def _async_infer(
         image,
         scores : list,
         print_stats : dict,
@@ -270,10 +231,10 @@ async def _async_infer(
                             print_stats=print_stats
                         )
 
-    response = await api_client._send_async('api/v2/infer', payload)
+    response = api_client._send_sync('api/v2/infer', payload)
     return response
 
-async def _async_notify(
+def _async_notify(
         api_client : PrintWatchClient,
         notification_level : str = 'warning'
     ):
@@ -294,7 +255,7 @@ async def _async_notify(
                             notification_level=notification_level
                         )
 
-    response = await api_client._send_async('api/v2/notify', payload)
+    response = api_client._send_sync('api/v2/notify', payload)
     return response
 
 
@@ -329,6 +290,9 @@ class LoopHandler:
         self.duet_states = duet_states
         self.rep_rap_api = rep_rap_api
         self.currentPreview = None
+        self.active = False
+        self.settingsIssue = False
+        self.errorMsg = ''
 
     def resize_buffers(self):
         if len(self._buffer) > self.settings.get("buffer_length"):
@@ -344,11 +308,12 @@ class LoopHandler:
         pil_img = Image.open(BytesIO(image))
         #if self._iframe_width is not None and self._iframe_height is not None:
         #pil_img = pil_img.resize((self._iframe_width, self._iframe_height))
+        pil_img = pil_img.resize((640, 480))
         process_image = ImageDraw.Draw(pil_img)
         width, height = pil_img.size
 
         for i, det in enumerate(boxes):
-            det = [j / 640 for j in det]
+            det = [j / FRAME_CONSTANT for j in det]
             x1 = det[0] * width
             y1 = det[1] * height
             x2 = det[2] * width
@@ -357,9 +322,10 @@ class LoopHandler:
 
 
         out_img = BytesIO()
-        pil_img.save(out_img, format='PNG')
+        pil_img.save(out_img, format='PNG', quality=80)
         contents = b64encode(out_img.getvalue()).decode('utf8')
         self.currentPreview = 'data:image/png;charset=utf-8;base64,' + contents.split('\n')[0]
+        self.settingsIssue = False
 
     def _handle_buffer(
                 self,
@@ -371,7 +337,6 @@ class LoopHandler:
         Manages the buffer, scores, and levels.
 
         '''
-
         self._buffer.append(smas)
         self._scores.append(score)
         self._levels = levels
@@ -388,29 +353,17 @@ class LoopHandler:
         action = response.get('action')
         if action == 'pause':
             # Send pause command to printer
-            '''
-            while not ((self.plugin._printer.is_pausing() and self.plugin._printer.is_printing()) or self.plugin._printer.is_paused()):
-                self.plugin._printer.pause_print()
-            '''
-            pass
+            r = self.rep_rap_api._pause_print(gcode = self.settings.get("pause_gcode"))
+            #pass
         elif action == 'cancel':
             # cancel current print
-            '''
-            while not (self.plugin._printer.is_cancelling() and self.plugin._printer.is_printing()):
-                self.plugin._printer.cancel_print()
-            '''
-            pass
+            r = self.rep_rap_api._pause_print(gcode = self.settings.get("cancel_gcode"))
         elif action == 'resume':
             # resume current print
-            '''
-            if self.plugin._printer.is_paused():
-                while not self.plugin._printer.is_printing():
-                    self.plugin._printer.resume_print()
-            '''
+            r = self.rep_rap_api._pause_print(gcode = self.settings.get("resume_gcode"))
             pass
         if response.get('settings') not in [None, False]:
             self.settings["thresholds"]["display"] = response.get('settings').get('detection_threshold') / 100.
-
             self.settings['buffer_length'] = response.get('settings').get('buffer_length')
             self.settings['thresholds']['notification'] = response.get('settings').get('notification_threshold') / 100.
             self.settings['thresholds']['action'] = response.get('settings').get('action_threshold') / 100.
@@ -424,7 +377,7 @@ class LoopHandler:
     def _allow_trigger(
             self,
             type : str = 'notify'
-        ):
+        ) -> bool:
         '''
         CHecks if a trigger action should be permitted
 
@@ -437,11 +390,11 @@ class LoopHandler:
         #if self._actionsSent > 10: # May want to change this for the show
         #    return False
         if type == 'notify':
-            if self.last_n_notifications_interval() < 10: #and self.retrigger_check():
-                return True if len(self._notificationsSent) < 10 and time() - self._lastNotification > self.notifyTimer else False
+            if self.last_n_notifications_interval() < 10 and self.retrigger_check():
+                return time() - self._lastNotification > self.notifyTimer
             return False
         elif type == 'action':
-            return True if self._actionsSent < 10 and time() - self._lastAction > self.notifyTimer else False
+            return time() - self._lastAction > self.notifyTimer
 
     def last_n_notifications_interval(self, interval : int = 4 * 60 * 60) -> int:
         '''
@@ -487,9 +440,9 @@ class LoopHandler:
 
 
 
-    async def _handle_action(
+    def _handle_action(
             self
-        ):
+        ) -> None:
         '''
         Checks if any actions should be taken.
         Notifications and Pauses will be triggered from inside this method.
@@ -502,29 +455,26 @@ class LoopHandler:
                 print("SENDING ACTION")
                 logger.debug("SENDING ACTION")
                 # Take the pause action if enabled
-                r = await self.rep_rap_api._pause_print(gcode = self.settings.get("pause_gcode"))
+                r = self.rep_rap_api._pause_print(gcode = self.settings.get("pause_gcode"))
 
-                response = await _async_notify(
+                response = _async_notify(
                                         api_client=self._api_client,
                                         notification_level=notification_level
                                     )
                 logger.debug("ASYNC NOTIFY ACTION: {}".format(response))
 
-                if response.get('statusCode') == 200:
-                    self._buffer = [0] * self.settings.get("buffer_length")
-                    self._scores = [0] * int(self.settings.get("buffer_length") * self.MULTIPLIER)
-                    self._levels = [False, False]
-                    self._actionsSent += 1
-                    self._lastAction = time()
-                else:
-                    # Retry logic
-                    pass
+                self._buffer = [[0, 0, 0]] * self.settings.get("buffer_length")
+                self._scores = [0] * int(self.settings.get("buffer_length") * self.MULTIPLIER)
+                self._levels = [False, False]
+                self._actionsSent += 1
+                self._lastAction = time()
+
         elif self._levels[0] and self._allow_trigger('notify'):
             print("Sending Warning via Email")
             logger.debug("Sending Warning via Email")
             notification_level = 'warning'
 
-            response = await _async_notify(
+            response = _async_notify(
                                     api_client=self._api_client,
                                     notification_level=notification_level
                                 )
@@ -542,12 +492,13 @@ class LoopHandler:
 
         try:
             # Add conditional for checking whether print state
-            duet_state = await self.rep_rap_api._get_state('/machine/status')
+            duet_state = self.rep_rap_api._get_state('/machine/status')
             sr_ = self.rep_rap_api.parse_state_response(duet_state) in ['printing', 'processing', 'busy']
             logger.debug(f'Printer state: {self.rep_rap_api.parse_state_response(duet_state)}')
             if sr_ or self.settings.get("test_mode"):
+                self.active = True
                 frame = self.camera.snap_sync()
-                if not isinstance(frame, bool):
+                if not isinstance(frame, str):
                     # Get the DUET print state here
                     if sr_:
                         job_state_ = duet_state.get("job")
@@ -572,14 +523,21 @@ class LoopHandler:
                             "progress" : 99.9,
                             "job_name" : "temp-job-name.stl"
                         }
-                    if self.settings.get("rotation") > 0:
-                        frame = Image.open(BytesIO(frame))
-                        frame = frame.rotate(int(self.settings.get("rotation")), expand=True)
-                        frame_ = BytesIO()
-                        frame.save(frame_, format='PNG')
-                        frame = frame_.getvalue()
 
-                    response = await _async_infer(
+                    frame = Image.open(BytesIO(frame))
+                    fs_ = (frame.height, frame.width)
+                    if [e > FRAME_CONSTANT for e in fs_].count(True) == 2:
+                        dom_ = fs_.index(max(fs_))
+                        ratio_ = fs_[1]/fs_[0] if dom_ == 1 else fs_[0]/fs_[1]
+                        frame = frame.resize((int(FRAME_CONSTANT * ratio_), FRAME_CONSTANT)) if dom_ == 1 else frame.resize((FRAME_CONSTANT, int(FRAME_CONSTANT * ratio_)))
+                    if self.settings.get("rotation") > 0:
+                        frame = frame.rotate(int(self.settings.get("rotation")), expand=True)
+
+                    frame_ = BytesIO()
+                    frame.save(frame_, format='PNG')
+                    frame = frame_.getvalue()
+
+                    response = _async_infer(
                                         image=b64encode(frame).decode('utf8'),
                                         scores=self._scores,
                                         print_stats=print_stats,
@@ -594,13 +552,22 @@ class LoopHandler:
                             )
 
                         self._check_action(response)
-                        await self._handle_action()
+                        self._handle_action()
+                        self.settingsIssue = False
+                        self.errorMsg = ''
                 else:
+                    self.settingsIssue = True
+                    self.errorMsg = "Issue with camera: {}".format(frame)
                     print("Issue with camera")
+            else:
+                self.active = False
+                self.errorMsg = ''
+                self._buffer = [[0, 0, 0]] * self.settings.get("buffer_length")
+                self._scores = [0] * int(self.settings.get("buffer_length") * self.MULTIPLIER)
+                self._levels = [False, False]
         except Exception as e:
-            print("Exception as e: {}".format(str(e)))
-            logger.debug("Exception as e: {}".format(str(e)))
-        except Exception as e:
+            self.settingsIssue = True
+            self.errorMsg = str(e)
             print("Error running once: {}".format(str(e)))
             logger.debug("Error running once: {}".format(str(e)))
 

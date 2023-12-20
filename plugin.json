@@ -12,7 +12,6 @@
   "sbcOutputRedirected": false,
   "sbcPythonDependencies": [
     "dsf-python==3.4.5.post2",
-    "aiohttp",
     "ujson",
     "Pillow",
     "requests"
