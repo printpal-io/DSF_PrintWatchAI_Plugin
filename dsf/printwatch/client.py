@@ -31,7 +31,8 @@ class PrintWatchClient():
             heartbeat : bool = False,
             notification_level : str = 'warning',
             settings : dict = {},
-            state : int = 0
+            state : int = 0,
+            force : bool = True
         ):
         if notify:
             payload = {
@@ -52,7 +53,7 @@ class PrintWatchClient():
                 'ticket_id' : self.ticket_id,
                 'version' : '1.3.01',
                 'state' : state,
-                'force' : True,
+                'force' : force,
             }
 
             if len(settings) > 0:

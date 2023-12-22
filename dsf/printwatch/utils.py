@@ -189,7 +189,8 @@ class RepRapAPI:
 def _async_heartbeat(
         api_client : PrintWatchClient,
         settings : dict = {},
-        state : int = 0
+        state : int = 0,
+        force : bool = True
     ):
     '''
     Returns the heartbeat response in an asynchrnous function call
@@ -203,7 +204,8 @@ def _async_heartbeat(
     payload = api_client._create_payload(
                             heartbeat=True,
                             settings=settings,
-                            state=state
+                            state=state,
+                            force=force
                         )
     response = api_client._send_sync('api/v2/heartbeat', payload)
     return response
@@ -565,6 +567,14 @@ class LoopHandler:
                 self._buffer = [[0, 0, 0]] * self.settings.get("buffer_length")
                 self._scores = [0] * int(self.settings.get("buffer_length") * self.MULTIPLIER)
                 self._levels = [False, False]
+                state_ = duet_state.get("state", {}).get("status", '').lower()
+                state_ = 1 if 'paus' in state_ else 2
+                _async_heartbeat(
+                        api_client=self._api_client,
+                        settings= {},
+                        state = state_,
+                        force=False
+                    )
         except Exception as e:
             self.settingsIssue = True
             self.errorMsg = str(e)
