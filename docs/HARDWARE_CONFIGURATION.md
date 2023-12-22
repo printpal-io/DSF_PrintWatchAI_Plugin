@@ -6,7 +6,7 @@
 
 As a result, it is reccomended that the camera be run in a resolution of 1920 x 1080 pixels. 
 
-For large-format printers it is recommended to use multiple High-Quality cameras, or to use a single 4K+ camera with multiple monitoring zones.
+For large-format printers it is recommended to use multiple High-Quality cameras, or to use a single 4K+ camera with multiple monitoring zones. See [AI_MODEL_TUNING.md](https://github.com/printpal-io/DSF_PrintWatchAI_Plugin/blob/main/docs/AI_MODEL_TUNING.md#slicing) to learn what multiple monitoring zones are.
 
 **Quality:** The camera streamer has a quality setting that ranges from 0-100, with 100 being the best quality. It is recomended to run the camera in a quality of 100 or as close to 100 as possible, with the absolute minimum being a quality of 80. 
 
