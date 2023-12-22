@@ -569,12 +569,15 @@ class LoopHandler:
                 self._levels = [False, False]
                 state_ = duet_state.get("state", {}).get("status", '').lower()
                 state_ = 1 if 'paus' in state_ else 2
-                _async_heartbeat(
-                        api_client=self._api_client,
-                        settings= {},
-                        state = state_,
-                        force=False
-                    )
+                r_ = _async_heartbeat(
+                            api_client=self._api_client,
+                            settings= {},
+                            state = state_,
+                            force=False
+                        )
+                if isinstance(r_, dict):
+                    self._check_action(r_)
+
         except Exception as e:
             self.settingsIssue = True
             self.errorMsg = str(e)
