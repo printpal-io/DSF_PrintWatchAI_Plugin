@@ -201,14 +201,18 @@ def _async_heartbeat(
     Returns:
     - response : Flask.Response - inference response
     '''
-    payload = api_client._create_payload(
-                            heartbeat=True,
-                            settings=settings,
-                            state=state,
-                            force=force
-                        )
-    response = api_client._send_sync('api/v2/heartbeat', payload)
-    return response
+    try:
+        payload = api_client._create_payload(
+                                heartbeat=True,
+                                settings=settings,
+                                state=state,
+                                force=force
+                            )
+        response = api_client._send_sync('api/v2/heartbeat', payload)
+        return response
+    except Exception as e:
+        print(f'Exception in sending heartbeat: {str(e)}')
+        return {}
 
 def _async_infer(
         image,
@@ -227,14 +231,18 @@ def _async_infer(
     Returns:
     - response : Flask.Response - inference response
     '''
-    payload = api_client._create_payload(
-                            encoded_image=image,
-                            scores=scores,
-                            print_stats=print_stats
-                        )
+    try:
+        payload = api_client._create_payload(
+                                encoded_image=image,
+                                scores=scores,
+                                print_stats=print_stats
+                            )
 
-    response = api_client._send_sync('api/v2/infer', payload)
-    return response
+        response = api_client._send_sync('api/v2/infer', payload)
+        return response
+    except Exception as e:
+        print(f'Exception in sending infer: {str(e)}')
+        return {}
 
 def _async_notify(
         api_client : PrintWatchClient,
@@ -251,14 +259,18 @@ def _async_notify(
     Returns:
     - response : Flask.Response - inference response
     '''
-    payload = api_client._create_payload(
-                            None,
-                            notify=True,
-                            notification_level=notification_level
-                        )
+    try:
+        payload = api_client._create_payload(
+                                None,
+                                notify=True,
+                                notification_level=notification_level
+                            )
 
-    response = api_client._send_sync('api/v2/notify', payload)
-    return response
+        response = api_client._send_sync('api/v2/notify', payload)
+        return response
+    except Exception as e:
+        print(f'Exception in sending notify: {str(e)}')
+        return {}
 
 
 
@@ -512,7 +524,7 @@ class LoopHandler:
                             "state" : 0,
                             "printTime" : t_,
                             "printTimeLeft" : tl_,
-                            "progress" : float(t_/(tl_ + t_)),
+                            "progress" : float(t_/(tl_ + t_)) * 100.0,
                             "job_name" : job_name_
                         }
 
