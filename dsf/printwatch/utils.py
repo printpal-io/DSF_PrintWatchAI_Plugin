@@ -322,17 +322,19 @@ class LoopHandler:
         pil_img = Image.open(BytesIO(image))
         #if self._iframe_width is not None and self._iframe_height is not None:
         #pil_img = pil_img.resize((self._iframe_width, self._iframe_height))
-        pil_img = pil_img.resize((640, 480))
+        fs_ = (pil_img.height, pil_img.width)
+        pil_img = pil_img.resize((640, int((fs_[0]/fs_[1]) * 640))) # Resize and maintain aspect
         process_image = ImageDraw.Draw(pil_img)
         width, height = pil_img.size
 
         for i, det in enumerate(boxes):
-            det = [j / FRAME_CONSTANT for j in det]
-            x1 = det[0] * width
-            y1 = det[1] * height
-            x2 = det[2] * width
-            y2 = det[3] * height
-            process_image.rectangle([(x1, y1), (x2, y2)], fill=None, outline="red", width=4)
+            if det[4] >= float(self.settings.get("thresholds", {}).get("notification", 0.3)):
+                det = [j / FRAME_CONSTANT for j in det]
+                x1 = det[0] * width
+                y1 = det[1] * height
+                x2 = det[2] * width
+                y2 = det[3] * height
+                process_image.rectangle([(x1, y1), (x2, y2)], fill=None, outline="red", width=2)
 
 
         out_img = BytesIO()
@@ -518,13 +520,22 @@ class LoopHandler:
                         job_state_ = duet_state.get("job")
 
                         job_name_ = job_state_.get("file", {}).get("fileName", 'temp-job-name.stl')
-                        t_ = job_state_.get("duration", 550) if job_state_.get("duration", 550) is not None else 550
-                        tl_ = job_state_.get("timesLeft", {}).get("file", 100) if job_state_.get("timesLeft", {}).get("file", 100) is not None else 100
+                        t_ = job_state_.get("duration", 125901) if job_state_.get("duration", 550) is not None else 550
+                        tl_ = job_state_.get("timesLeft", {}).get("file", 256000) if job_state_.get("timesLeft", {}).get("file", 100) is not None else 100
+
+                        total_raw_extruded = [extruder.get("rawPosition", 0) for extruder in duet_state.get('mode', {}).get('extruders', []) if extruder.get('rawPosition', None) if not None]
+                        total_raw_extruded = 0 if len(total_raw_extruded) == 0 else sum(total_raw_extruded)
+
+                        if len(duet_state.get('job', {}).get('file', {}).get('filament', [])) > 0 and total_raw_extruded > 0:
+                            progress = min(total_raw_extruded / sum(duet_state.get('job', {}).get('file', {}).get('filament', [])), 1.0)
+                        else:
+                            progress = 0.0
+
                         print_stats = {
                             "state" : 0,
                             "printTime" : t_,
                             "printTimeLeft" : tl_,
-                            "progress" : float(t_/(tl_ + t_)) * 100.0,
+                            "progress" : float(progress),
                             "job_name" : job_name_
                         }
 
@@ -532,8 +543,8 @@ class LoopHandler:
                     else:
                         print_stats = {
                             "state" : 0,
-                            "printTime" : 550,
-                            "printTimeLeft" : 1,
+                            "printTime" : 150243,
+                            "printTimeLeft" : 289274,
                             "progress" : 99.9,
                             "job_name" : "temp-job-name.stl"
                         }

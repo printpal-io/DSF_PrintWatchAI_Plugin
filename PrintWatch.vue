@@ -296,7 +296,12 @@ export default {
         .then((data) => {
 					if (data.status == 8000) {
 						this.trackingInfo = data.items.status;
-						this.defectLevel = parseInt(parseFloat(data.items.status.buffer.slice(-1)[0][0]) * 100)
+						if (data.items.status.active) {
+							this.defectLevel = parseInt(parseFloat(data.items.status.buffer.slice(-1)[0][0]) * 100);
+						} else {
+							this.defectLevel = 0;
+						}
+
 					}
         })
         .catch(error => {

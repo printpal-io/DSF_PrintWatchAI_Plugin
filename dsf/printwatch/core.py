@@ -175,7 +175,8 @@ class PrintFarmPro:
                         {'status' :
                             {'scores' : self.runner._loop_handler._scores,
                             'levels' : self.runner._loop_handler._levels,
-                            'buffer' : self.runner._loop_handler._buffer
+                            'buffer' : self.runner._loop_handler._buffer,
+                            'active' : self.runner._loop_handler.active
                             }
                         }
                     }), response_type=HttpResponseType.JSON)
