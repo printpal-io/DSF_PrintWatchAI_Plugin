@@ -520,15 +520,18 @@ class LoopHandler:
                         job_state_ = duet_state.get("job")
 
                         job_name_ = job_state_.get("file", {}).get("fileName", 'temp-job-name.stl')
-                        t_ = job_state_.get("duration", 125901) if job_state_.get("duration", 550) is not None else 550
-                        tl_ = job_state_.get("timesLeft", {}).get("file", 256000) if job_state_.get("timesLeft", {}).get("file", 100) is not None else 100
+                        t_ = job_state_.get("duration", 550) if job_state_.get("duration", 550) is not None else 550
+                        tl_ = job_state_.get("timesLeft", {}).get("file", 100) if job_state_.get("timesLeft", {}).get("file", 100) is not None else 100
 
-                        total_raw_extruded = [extruder.get("rawPosition", 0) for extruder in duet_state.get('mode', {}).get('extruders', []) if extruder.get('rawPosition', None) if not None]
-                        total_raw_extruded = 0 if len(total_raw_extruded) == 0 else sum(total_raw_extruded)
+                        try:
+                            total_raw_extruded = [extruder.get("rawPosition", 0) for extruder in duet_state.get('mode', {}).get('extruders', []) if extruder.get('rawPosition', None) if not None]
+                            total_raw_extruded = 0 if len(total_raw_extruded) == 0 else sum(total_raw_extruded)
 
-                        if len(duet_state.get('job', {}).get('file', {}).get('filament', [])) > 0 and total_raw_extruded > 0:
-                            progress = min(total_raw_extruded / sum(duet_state.get('job', {}).get('file', {}).get('filament', [])), 1.0)
-                        else:
+                            if len(duet_state.get('job', {}).get('file', {}).get('filament', [])) > 0 and total_raw_extruded > 0:
+                                progress = min(total_raw_extruded / sum(duet_state.get('job', {}).get('file', {}).get('filament', [])), 1.0)
+                            else:
+                                progress = 0.0
+                        except:
                             progress = 0.0
 
                         print_stats = {
